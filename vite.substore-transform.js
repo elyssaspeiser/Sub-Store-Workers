@@ -89,7 +89,8 @@ export function subStoreTransformPlugin() {
     function precompilePeggyParser(contents, id, pluginContext) {
         const match = /const\s+grammars\s*=\s*String\.raw`([\s\S]*?)`;/.exec(contents);
         if (!match) {
-            pluginContext.error(`[sub-store-transform] ${id} Peggy parser 预编译失败：未找到 grammars`);
+            // 非 Peggy 文法文件（如 trojan-uri.js 纯 JS 解析器），原样放行
+            return contents;
         }
 
         const parserSource = peggy.generate(match[1], {
@@ -153,6 +154,7 @@ export default function getParser() {
                 }
             }
 
+            // 仅对真正的 Peggy 文法文件预编译；trojan-uri.js 等纯 JS 解析器会原样放行
             if (id.includes('sub-store/backend/src/core/proxy-utils/parsers/peggy/')) {
                 contents = precompilePeggyParser(contents, id, this);
             }
