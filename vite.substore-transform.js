@@ -55,12 +55,28 @@ export function subStoreTransformPlugin() {
             new RegExp(`(?<!['\"\`])\\brequire\\s*\\(\\s*['\"\`]${escaped}['\"\`]\\s*\\)`),
         ];
     });
+
     function replaceEvalRequire(contents, moduleName, replacement) {
         const escaped = moduleName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\//g, '\\/');
         return contents.replace(
             new RegExp(`eval\\s*\\(\\s*['\"\`]require\\s*\\(\\s*['\"\`]${escaped}['\"\`]\\s*\\)['\"\`]\\s*,?\\s*\\)`, 'g'),
             replacement,
         );
+    }
+
+    // 兼容上游 runtime/path.js 等处的裸 require('xxx')
+    function replacePlainRequire(contents, moduleName, replacement) {
+        const escaped = moduleName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\//g, '\\/');
+        return contents.replace(
+            new RegExp(`(?<!['\"\`])\\brequire\\s*\\(\\s*['\"\`]${escaped}['\"\`]\\s*\\)`, 'g'),
+            replacement,
+        );
+    }
+
+    function replaceRequire(contents, moduleName, replacement) {
+        contents = replaceEvalRequire(contents, moduleName, replacement);
+        contents = replacePlainRequire(contents, moduleName, replacement);
+        return contents;
     }
 
     function assertNoDangerousRequireResidue(contents, id, pluginContext) {
@@ -105,25 +121,25 @@ export default function getParser() {
 
             let contents = code;
 
-            contents = replaceEvalRequire(contents, 'dotenv', '({ config: () => {} })');
-            contents = replaceEvalRequire(contents, 'fs', 'globalThis.__fs_shim__');
-            contents = replaceEvalRequire(contents, 'path', 'globalThis.__path_shim__');
-            contents = replaceEvalRequire(contents, 'undici', '({ request: globalThis.fetch, Agent: class {}, ProxyAgent: class {}, EnvHttpProxyAgent: class {} })');
-            contents = replaceEvalRequire(contents, 'fetch-socks', '({ socksDispatcher: () => null })');
-            contents = replaceEvalRequire(contents, 'express', 'null');
-            contents = replaceEvalRequire(contents, 'body-parser', '({ json: () => (req, res, next) => next(), urlencoded: () => (req, res, next) => next(), raw: () => (req, res, next) => next() })');
-            contents = replaceEvalRequire(contents, 'cron', '({ CronJob: class { constructor() {} } })');
-            contents = replaceEvalRequire(contents, 'child_process', '({ execFile: () => {} })');
-            contents = replaceEvalRequire(contents, 'connect-history-api-fallback', '(() => (req, res, next) => next())');
-            contents = replaceEvalRequire(contents, 'http-proxy-middleware', '({ createProxyMiddleware: () => (req, res, next) => next() })');
-            contents = replaceEvalRequire(contents, 'mime-types', '({ contentType: () => "text/plain" })');
-            contents = replaceEvalRequire(contents, 'ms', 'globalThis.__ms_shim__');
-            contents = replaceEvalRequire(contents, 'nanoid', '({ nanoid: (size = 21) => crypto.randomUUID().replace(/-/g, "").slice(0, size) })');
-            contents = replaceEvalRequire(contents, '@maxmind/geoip2-node', '({ Reader: { openBuffer: () => ({ country: () => null, asn: () => null }) } })');
-            contents = replaceEvalRequire(contents, 'stream/promises', 'globalThis.__stream_promises_shim__');
+            contents = replaceRequire(contents, 'dotenv', '({ config: () => {} })');
+            contents = replaceRequire(contents, 'fs', 'globalThis.__fs_shim__');
+            contents = replaceRequire(contents, 'path', 'globalThis.__path_shim__');
+            contents = replaceRequire(contents, 'undici', '({ request: globalThis.fetch, Agent: class {}, ProxyAgent: class {}, EnvHttpProxyAgent: class {} })');
+            contents = replaceRequire(contents, 'fetch-socks', '({ socksDispatcher: () => null })');
+            contents = replaceRequire(contents, 'express', 'null');
+            contents = replaceRequire(contents, 'body-parser', '({ json: () => (req, res, next) => next(), urlencoded: () => (req, res, next) => next(), raw: () => (req, res, next) => next() })');
+            contents = replaceRequire(contents, 'cron', '({ CronJob: class { constructor() {} } })');
+            contents = replaceRequire(contents, 'child_process', '({ execFile: () => {} })');
+            contents = replaceRequire(contents, 'connect-history-api-fallback', '(() => (req, res, next) => next())');
+            contents = replaceRequire(contents, 'http-proxy-middleware', '({ createProxyMiddleware: () => (req, res, next) => next() })');
+            contents = replaceRequire(contents, 'mime-types', '({ contentType: () => "text/plain" })');
+            contents = replaceRequire(contents, 'ms', 'globalThis.__ms_shim__');
+            contents = replaceRequire(contents, 'nanoid', '({ nanoid: (size = 21) => crypto.randomUUID().replace(/-/g, "").slice(0, size) })');
+            contents = replaceRequire(contents, '@maxmind/geoip2-node', '({ Reader: { openBuffer: () => ({ country: () => null, asn: () => null }) } })');
+            contents = replaceRequire(contents, 'stream/promises', 'globalThis.__stream_promises_shim__');
 
             contents = contents.replace(/const\s+isNode\s*=\s*eval\s*\(\s*`typeof\s+process\s*!==\s*"undefined"`\s*\)/g, 'const isNode = false');
-            contents = contents.replace(/const\s+isSurge\s*=\s*typeof\s+\$httpClient[^;]+;/g,'const isSurge = true;');
+            contents = contents.replace(/const\s+isSurge\s*=\s*typeof\s+\$httpClient[^;]+;/g, 'const isSurge = true;');
 
             assertNoDangerousRequireResidue(contents, id, this);
 
